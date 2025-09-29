@@ -29,7 +29,6 @@ Elegir carpeta de descarga (ruta predeterminada o personalizada)
 Indicación para salir ("Presione Enter para cerrar")
 Multiplataforma (funciona en Windows mediante compilación con Go)
 
-
 ##🛠 Requisitos
 Go (versión 1.20 o superior)
 El binario yt-dlp ubicado en bin/yt-dlp.exe (o la ruta correspondiente)
@@ -46,7 +45,6 @@ RU
 Выбор папки для скачивания (стандартная или пользовательская)
 Подсказка для выхода ("Нажмите Enter для закрытия")
 Кроссплатформенность (работает на Windows через сборку Go)
-
 
 ##🛠 Требования
 Go (версия 1.20+)
