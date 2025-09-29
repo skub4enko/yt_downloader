@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
@@ -24,73 +25,67 @@ import (
 
 // =================== YouTube Downloader ===================
 
-// GetVideoTitle извлекает название видео с YouTube
+// GetVideoTitle extracts the video title using yt-dlp
 func GetVideoTitle(url string) string {
 	ytPath := filepath.Join("bin", "yt-dlp.exe")
-	
-	// ИСПРАВЛЕНИЕ: добавляем флаги для правильной кодировки
+
+	// Ensure proper encoding flags
 	cmd := exec.Command(ytPath, "--quiet", "--get-title", "--encoding", "utf-8", url)
-	
-	// Устанавливаем кодировку для Windows
+
+	// Set Python encoding for Windows
 	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8")
-	
+
 	output, err := cmd.Output()
 	if err != nil {
 		fmt.Println("⚠ Failed to get title:", err)
 		return ""
 	}
-	
+
 	title := strings.TrimSpace(string(output))
-	
-	// ОТЛАДКА: показываем что получили от yt-dlp
-	fmt.Printf("🔍 Название от yt-dlp: '%s'\n", title)
-	fmt.Printf("📏 Длина: %d байт, UTF-8 валидно: %t\n", len(title), utf8.ValidString(title))
-	
+
+	// Debug: show what yt-dlp returned
+	fmt.Printf("🔍 Title from yt-dlp: '%s'\n", title)
+	fmt.Printf("📏 Length: %d bytes, UTF-8 valid: %t\n", len(title), utf8.ValidString(title))
+
 	return title
 }
 
-// =================== Файловые утилиты ===================
+// =================== File utilities ===================
 
-// GenerateFallbackTitle генерирует fallback-название
+// GenerateFallbackTitle creates a fallback filename
 func GenerateFallbackTitle() string {
 	return "video_" + fmt.Sprintf("%d", time.Now().Unix())
 }
 
-// SanitizeFileName очищает название от нежелательных символов
-// ИСПРАВЛЕНИЕ: НЕ удаляем кириллицу, только действительно опасные символы!
+// SanitizeFileName removes unsafe characters but keeps non-Latin scripts
 func SanitizeFileName(name string) string {
 	if name == "" {
 		return GenerateFallbackTitle()
 	}
-	
+
 	original := name
-	
-	// СТАРАЯ ВЕРСИЯ (НЕПРАВИЛЬНО):
-	// re := regexp.MustCompile("[^a-zA-Z0-9-_.]+")  // <-- ЭТО УБИВАЛО КИРИЛЛИЦУ!
-	// return re.ReplaceAllString(name, "_")
-	
-	// НОВАЯ ВЕРСИЯ (ПРАВИЛЬНО):
-	// Заменяем только символы, которые нельзя использовать в именах файлов
+
+	// Replace only characters disallowed by Windows filesystem
 	dangerousChars := regexp.MustCompile(`[<>:"/\\|?*]`)
 	name = dangerousChars.ReplaceAllString(name, "_")
-	
-	// Удаляем управляющие символы (но не обычные!)
+
+	// Remove control characters
 	controlChars := regexp.MustCompile(`[\x00-\x1f\x7f]`)
 	name = controlChars.ReplaceAllString(name, "")
-	
-	// Заменяем множественные пробелы на один
+
+	// Collapse multiple spaces
 	multipleSpaces := regexp.MustCompile(`\s+`)
 	name = multipleSpaces.ReplaceAllString(name, " ")
-	
-	// Убираем пробелы по краям
+
+	// Trim spaces
 	name = strings.TrimSpace(name)
-	
-	// Ограничиваем длину (оставляем место для расширения)
+
+	// Limit length (leave room for extension)
 	if len(name) > 200 {
 		name = truncateUTF8(name, 200)
 	}
-	
-	// Обрабатываем зарезервированные имена Windows
+
+	// Handle Windows reserved names
 	reservedNames := []string{"CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"}
 	upper := strings.ToUpper(name)
 	for _, reserved := range reservedNames {
@@ -99,73 +94,73 @@ func SanitizeFileName(name string) string {
 			break
 		}
 	}
-	
-	// Если название стало пустым после очистки
+
+	// If name became empty after sanitization
 	if name == "" {
 		name = GenerateFallbackTitle()
 	}
-	
-	// ОТЛАДКА: показываем что изменилось
+
+	// Debug: show what changed
 	if original != name {
-		fmt.Printf("📝 Санитизация: '%s' -> '%s'\n", original, name)
+		fmt.Printf("📝 Sanitized: '%s' -> '%s'\n", original, name)
 	} else {
-		fmt.Printf("✅ Название сохранено: '%s'\n", name)
+		fmt.Printf("✅ Name kept: '%s'\n", name)
 	}
-	
+
 	return name
 }
 
-// truncateUTF8 корректно обрезает UTF-8 строку
+// truncateUTF8 safely truncates a UTF-8 string
 func truncateUTF8(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
 	}
-	
+
 	for i := maxLen; i >= 0; i-- {
 		if utf8.ValidString(s[:i]) {
 			return s[:i]
 		}
 	}
-	
+
 	return s[:maxLen]
 }
 
-// ParseURLsFromFile парсит URL из текстового содержимого файла
+// ParseURLsFromFile extracts URLs from text content
 func ParseURLsFromFile(content string) []string {
 	lines := strings.Split(content, "\n")
 	var urls []string
-	
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		
-		// Пропускаем пустые строки и комментарии
+
+		// Skip empty lines and comments
 		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "//") {
 			continue
 		}
-		
-		// Базовая проверка что это похоже на URL
-		if strings.Contains(line, "youtube.com") || 
-		   strings.Contains(line, "youtu.be") ||
-		   strings.Contains(line, "http://") ||
-		   strings.Contains(line, "https://") {
+
+		// Basic URL shape check
+		if strings.Contains(line, "youtube.com") ||
+			strings.Contains(line, "youtu.be") ||
+			strings.Contains(line, "http://") ||
+			strings.Contains(line, "https://") {
 			urls = append(urls, line)
 		}
 	}
-	
+
 	return urls
 }
 
-// IsValidURL проверяет является ли строка валидным URL
+// IsValidURL checks if string looks like a URL we accept
 func IsValidURL(url string) bool {
-	return strings.Contains(url, "youtube.com") || 
-		   strings.Contains(url, "youtu.be") ||
-		   strings.HasPrefix(url, "http://") ||
-		   strings.HasPrefix(url, "https://")
+	return strings.Contains(url, "youtube.com") ||
+		strings.Contains(url, "youtu.be") ||
+		strings.HasPrefix(url, "http://") ||
+		strings.HasPrefix(url, "https://")
 }
 
-// =================== WAV-плеер ===================
+// =================== Audio player ===================
 
-// intBufferToBytes конвертирует *audio.IntBuffer в []byte (16-bit little endian)
+// intBufferToBytes converts *audio.IntBuffer to []byte (16-bit LE)
 func intBufferToBytes(buf *audio.IntBuffer) []byte {
 	out := make([]byte, len(buf.Data)*2)
 	for i, v := range buf.Data {
@@ -174,31 +169,27 @@ func intBufferToBytes(buf *audio.IntBuffer) []byte {
 	return out
 }
 
-// PlayBeep воспроизводит звук из файла assets/beep_long.wav
-func PlayBeep() {
-	f, err := os.Open("assets/beep_long.wav")
+// playWav plays a WAV file by path
+func playWav(path string) error {
+	f, err := os.Open(path)
 	if err != nil {
-		fmt.Println("⚠ Не удалось открыть beep_long.wav:", err)
-		return
+		return err
 	}
 	defer f.Close()
 
 	decoder := wav.NewDecoder(f)
 	if !decoder.IsValidFile() {
-		fmt.Println("⚠ Неверный WAV файл")
-		return
+		return fmt.Errorf("invalid WAV file: %s", path)
 	}
 
 	buf, err := decoder.FullPCMBuffer()
 	if err != nil {
-		fmt.Println("⚠ Ошибка декодирования WAV:", err)
-		return
+		return fmt.Errorf("wav decode error: %v", err)
 	}
 
 	ctx, ready, err := oto.NewContext(int(buf.Format.SampleRate), buf.Format.NumChannels, 2)
 	if err != nil {
-		fmt.Println("⚠ Ошибка инициализации аудио:", err)
-		return
+		return err
 	}
 	<-ready
 
@@ -207,53 +198,97 @@ func PlayBeep() {
 
 	player.Play()
 
-	// Ждем окончания воспроизведения
+	// Wait for playback to finish
 	for player.IsPlaying() {
 		time.Sleep(100 * time.Millisecond)
 	}
+
+	return nil
 }
 
-// =================== Автообновление yt-dlp ===================
+// PlayBeepShort plays a short completion sound: assets/beep_short.wav
+func PlayBeepShort() { _ = playTone(1000, 300) }
 
-// UpdateYtDlp обновляет yt-dlp.exe в папке bin
+// PlayBeepLong plays a long completion sound: assets/beep_long.wav
+func PlayBeepLong() { _ = playTone(800, 3000) }
+
+// playTone synthesizes and plays a simple sine-wave tone using oto.
+// frequencyHz: tone frequency; durationMs: duration in milliseconds.
+func playTone(frequencyHz int, durationMs int) error {
+	const sampleRate = 44100
+	const channels = 2
+	const bytesPerSample = 2 // 16-bit
+
+	totalSamples := sampleRate * durationMs / 1000
+	// stereo interleaved
+	data := make([]byte, totalSamples*channels*bytesPerSample)
+	amplitude := 0.25 // 25% of max to avoid clipping
+	twoPiF := 2.0 * math.Pi * float64(frequencyHz)
+	for i := 0; i < totalSamples; i++ {
+		t := float64(i) / float64(sampleRate)
+		s := math.Sin(twoPiF * t)
+		v := int16(s * amplitude * 32767)
+		// write to both channels
+		idx := i * channels * bytesPerSample
+		binary.LittleEndian.PutUint16(data[idx:], uint16(v))
+		binary.LittleEndian.PutUint16(data[idx+2:], uint16(v))
+	}
+
+	ctx, ready, err := oto.NewContext(sampleRate, channels, bytesPerSample)
+	if err != nil {
+		return err
+	}
+	<-ready
+	player := ctx.NewPlayer(bytes.NewReader(data))
+	defer player.Close()
+	player.Play()
+	for player.IsPlaying() {
+		time.Sleep(50 * time.Millisecond)
+	}
+	return nil
+}
+
+// =================== yt-dlp auto update ===================
+
+// UpdateYtDlp updates yt-dlp.exe in bin
 func UpdateYtDlp() {
 	ytPath := filepath.Join("bin", "yt-dlp.exe")
 
 	cmd := exec.Command(ytPath, "-U")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		fmt.Println("⚠ Ошибка обновления yt-dlp:", err)
+		fmt.Println("⚠ yt-dlp update error:", err)
 		fmt.Println(string(output))
 		return
 	}
-	fmt.Println("✅ yt-dlp обновлён")
+	fmt.Println("✅ yt-dlp updated")
 	fmt.Println(string(output))
 }
 
-// CheckUpdateYtDlp проверяет наличие новой версии yt-dlp
+// CheckUpdateYtDlp checks for new yt-dlp version
 func CheckUpdateYtDlp() {
 	ytPath := filepath.Join("bin", "yt-dlp.exe")
 
-	// Проверка, существует ли локальный бинарь
+	// Check local binary exists
 	if _, err := os.Stat(ytPath); os.IsNotExist(err) {
-		fmt.Println("⚠ bin/yt-dlp.exe не найден, скачиваю последнюю версию...")
+		fmt.Println("⚠ bin/yt-dlp.exe not found, downloading latest...")
 		downloadYtDlp(ytPath)
 		return
 	}
 
-	// Получаем локальную версию
+	// Get local version
 	cmd := exec.Command(ytPath, "--version")
 	currentVerBytes, err := cmd.Output()
 	if err != nil {
-		fmt.Println("⚠ Не удалось получить локальную версию yt-dlp:", err)
+		fmt.Println("⚠ Failed to get local yt-dlp version:", err)
 		return
 	}
 	currentVer := strings.TrimSpace(string(currentVerBytes))
 
-	// Получаем последнюю версию с GitHub
+	// Get latest version from GitHub
 	resp, err := http.Get("https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest")
 	if err != nil {
-		fmt.Println("⚠ Не удалось проверить последнюю версию:", err)
+		fmt.Println("⚠ Failed to check latest version:", err)
 		return
 	}
 	defer resp.Body.Close()
@@ -263,19 +298,19 @@ func CheckUpdateYtDlp() {
 	latestVer, _ := data["tag_name"].(string)
 
 	if latestVer != "" && latestVer != currentVer {
-		fmt.Println("⬆ Доступен новый yt-dlp:", latestVer, "текущая:", currentVer)
+		fmt.Println("⬆ New yt-dlp available:", latestVer, "current:", currentVer)
 		UpdateYtDlp()
 	} else {
-		fmt.Println("✅ yt-dlp актуален:", currentVer)
+		fmt.Println("✅ yt-dlp is up to date:", currentVer)
 	}
 }
 
-// downloadYtDlp скачивает yt-dlp.exe в bin/
+// downloadYtDlp downloads yt-dlp.exe into bin/
 func downloadYtDlp(ytPath string) {
 	url := "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
 	resp, err := http.Get(url)
 	if err != nil {
-		fmt.Println("⚠ Ошибка загрузки yt-dlp:", err)
+		fmt.Println("⚠ yt-dlp download error:", err)
 		return
 	}
 	defer resp.Body.Close()
@@ -284,16 +319,16 @@ func downloadYtDlp(ytPath string) {
 
 	out, err := os.Create(ytPath)
 	if err != nil {
-		fmt.Println("⚠ Ошибка создания файла yt-dlp.exe:", err)
+		fmt.Println("⚠ Failed to create yt-dlp.exe:", err)
 		return
 	}
 	defer out.Close()
 
 	_, err = io.Copy(out, resp.Body)
 	if err != nil {
-		fmt.Println("⚠ Ошибка записи yt-dlp.exe:", err)
+		fmt.Println("⚠ Failed to write yt-dlp.exe:", err)
 		return
 	}
 
-	fmt.Println("✅ yt-dlp.exe скачан в bin/")
+	fmt.Println("✅ yt-dlp.exe downloaded to bin/")
 }

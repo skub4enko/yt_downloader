@@ -1,190 +1,242 @@
-# 🏗️ Инструкции по сборке YouTube Downloader
+# 🏗️ Build Instructions — YouTube Downloader
 
-## 📋 Требования
+## 📋 Requirements
 
-### Для компиляции:
-- **Go 1.24.2+** - [скачать с golang.org](https://golang.org/dl/)
-- **Git** (опционально) - для клонирования репозитория
+### To build:
+- **Go 1.24.2+** — download from https://golang.org/dl/
+- **Git** (optional) — to clone the repo
 
-### Для работы программы:
-- **Windows 10/11** - для portable версии
-- **Интернет соединение** - для скачивания видео
-- **~50MB свободного места** - для программы и зависимостей
+### To run:
+- **Windows 10/11** (portable build)
+- **Internet connection** (to download videos)
+- **~50 MB free space** for app and dependencies
 
-## 🚀 Быстрая сборка (Windows)
+## 🚀 Quick build (Windows)
 
-### Вариант 1: Автоматическая сборка
+### Option 1: Automatic
 ```batch
-# 1. Скачиваем зависимости
+REM 1) Download dependencies (yt-dlp, sample assets, links.txt)
 download_deps.bat
 
-# 2. Собираем portable версию
+REM 2) Build portable bundle into dist\ and create ZIP
 build.bat
 ```
 
-### Вариант 2: Ручная сборка
+### Option 2: Manual
 ```batch
-# 1. Создаем папки
+REM 1) Create folders
 mkdir bin assets
 
-# 2. Скачиваем yt-dlp.exe в папку bin/
-# Ссылка: https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe
+REM 2) Download yt-dlp.exe to bin/
+REM https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe
 
-# 3. Компилируем Go код
+REM 3) Build Go binary
 go mod tidy
 go build -ldflags="-s -w" -o yt-downloader.exe .
 ```
 
-## 🐧 Сборка для Linux/macOS
+Notes:
+- We no longer use Windows resources (no resource.syso, no icon at runtime).
+- Completion sounds are synthesized in code; WAV files are not required to play beeps.
+- FFmpeg is required for merging streams and MP3 extraction. The project can auto-download FFmpeg to bin/.
 
-### Используя Makefile:
+## 🐧 Building on Linux/macOS (optional)
+
+Using Makefile:
 ```bash
-# Полная сборка
-make all
-
-# Только для Linux
-make linux
-
-# Только для Windows (кросс-компиляция)
-make windows
-
-# Скачать зависимости
-make deps
-make install-ytdlp
+make all         # full build
+make linux       # linux build
+make windows     # cross-compile for Windows
+make deps        # helper targets
 ```
 
-### Ручная сборка:
+Manual (example):
 ```bash
-# 1. Загрузить зависимости
 go mod tidy
-
-# 2. Скачать yt-dlp
 mkdir -p bin
 curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o bin/yt-dlp
 chmod +x bin/yt-dlp
-
-# 3. Компилировать
 go build -ldflags="-s -w" -o yt-downloader .
 ```
 
-## 📁 Структура готовой portable версии
+## 📁 Portable output layout
 
 ```
 YouTube-Downloader-Portable/
-├── yt-downloader.exe          # Основная программа
+├── yt-downloader.exe        # main app
 ├── bin/
-│   └── yt-dlp.exe            # Утилита скачивания
-├── assets/
-│   └── beep_long.wav         # Звуковой сигнал
-├── links.txt                 # Файл для URL списков
-└── README.txt               # Инструкции
+│   └── yt-dlp.exe          # downloader utility
+├── assets/                 # optional assets folder
+├── links.txt               # batch URL list
+└── README.txt              # usage (EN/ES)
 ```
 
-## ⚙️ Опции компиляции
+## ⚙️ Build options
 
-### Размер файла:
-- **Стандартная сборка**: ~15-20MB
-- **С флагами оптимизации**: ~8-12MB
-- **С UPX сжатием**: ~3-5MB
+### Binary size (rough):
+- Standard build: ~15–20 MB
+- With -ldflags -s -w: ~8–12 MB
+- With UPX: ~3–5 MB
 
-### Флаги сборки:
+### Useful flags
 ```bash
-# Минимальный размер
-go build -ldflags="-s -w" -o yt-downloader.exe .
-
-# Статическая сборка (без внешних dll)
-CGO_ENABLED=0 go build -ldflags="-s -w" -o yt-downloader.exe .
-
-# С отладочной информацией
-go build -o yt-downloader.exe .
+go build -ldflags="-s -w" -o yt-downloader.exe .     # smaller size
+CGO_ENABLED=0 go build -ldflags="-s -w" -o yt-downloader.exe .  # fully static
+go build -o yt-downloader.exe .                      # with debug info
 ```
 
-### Кросс-компиляция:
+### Cross-compilation
 ```bash
-# Для Windows из Linux
+# From Linux to Windows
 GOOS=windows GOARCH=amd64 go build -o yt-downloader.exe .
 
-# Для Linux из Windows
+# From Windows to Linux
 set GOOS=linux
 set GOARCH=amd64
 go build -o yt-downloader .
 ```
 
-## 🧪 Тестирование сборки
+## 🧪 Verifying the build
 
-### Проверка зависимостей:
+### Check tools
 ```bash
-# Проверить что Go найден
 go version
-
-# Проверить модули
 go mod verify
-
-# Проверить что yt-dlp работает
-bin/yt-dlp.exe --version    # Windows
-bin/yt-dlp --version        # Linux
+bin/yt-dlp.exe --version   # Windows
+bin/yt-dlp --version       # Linux
+bin/ffmpeg.exe -version    # Windows (if auto-downloaded)
 ```
 
-### Тест запуска:
+### Run the app
 ```bash
-# Запустить программу
-./yt-downloader.exe    # Windows
-./yt-downloader        # Linux
-
-# Должно показать главное меню
+./yt-downloader.exe   # Windows
+./yt-downloader       # Linux
 ```
+You should see the main menu with options:
+- Audio (MP3)
+- Video (MP4/WebM) including 2160p, 1440p, 1080p, 720p, 480p, 360p.
 
-## 📦 Создание installer (опционально)
-
-### Для Windows (NSIS):
-```nsis
-# Можно создать installer используя NSIS
-# Файл installer.nsi уже готов в репозитории
-makensis installer.nsi
-```
-
-### Для Linux (AppImage):
-```bash
-# Создание AppImage
-make linux
-./create-appimage.sh dist/
-```
-
-## 🔧 Устранение проблем
+## 🔧 Troubleshooting
 
 ### "go: command not found"
-- Установите Go с официального сайта
-- Добавьте Go в PATH
-- Перезапустите командную строку
+- Install Go and add it to PATH; restart your terminal
 
 ### "yt-dlp.exe not found"
-- Запустите `download_deps.bat` 
-- Или скачайте вручную в папку `bin/`
+- Run `download_deps.bat` or manually place yt-dlp.exe into `bin/`
 
-### Большой размер exe файла
-- Используйте флаги `-ldflags="-s -w"`
-- Установите UPX: `upx --best yt-downloader.exe`
+### "FFmpeg not found"
+- Run `download_deps.bat` (it downloads ffmpeg.exe and ffprobe.exe into `bin/`)
+- Or install FFmpeg manually and add to PATH, or place binaries in `bin/`
+- The app passes `--ffmpeg-location bin` to yt-dlp
 
-### Ошибки при компиляции
-- Проверьте версию Go: `go version`
-- Обновите модули: `go mod tidy`
-- Очистите кеш: `go clean -modcache`
+### Large .exe size
+- Use `-ldflags="-s -w"` and optionally UPX: `upx --best yt-downloader.exe`
 
-## 📋 Checklist готовности
+### Build errors
+- Check Go version: `go version`
+- Refresh modules: `go mod tidy`
+- Clean cache: `go clean -modcache`
 
-- ✅ Go 1.24.2+ установлен
-- ✅ Проект скомпилирован без ошибок
-- ✅ yt-dlp.exe находится в bin/
-- ✅ beep_long.wav находится в assets/
-- ✅ Программа запускается и показывает меню
-- ✅ Можно скачать тестовое видео
-- ✅ Все файлы упакованы в portable архив
+## 📋 Release checklist
 
-## 🎯 Результат
+- ✅ Go 1.24.2+ installed
+- ✅ Project builds without errors
+- ✅ `bin/yt-dlp.exe` present
+- ✅ `bin/ffmpeg.exe` and `bin/ffprobe.exe` present (or FFmpeg in PATH)
+- ✅ App launches and shows the menu
+- ✅ Test video downloads work
+- ✅ Portable archive created in project root
 
-После успешной сборки вы получите:
-- **yt-downloader.exe** - готовая к работе программа
-- **YouTube-Downloader-Portable.zip** - архив для распространения
-- Программа работает на чистом Windows без установки дополнительных компонентов
+## 🎯 Result
 
-Размер итогового архива: **~15-25MB**
+You will get:
+- **yt-downloader.exe** — the portable app
+- **YouTube-Downloader-Portable.zip** — ready-to-share archive
+
+No Windows resource embedding is used; sounds are synthesized at runtime.
+
+---
+
+# 🇷🇺 Инструкции по сборке (кратко)
+
+## Требования
+- Go 1.24.2+
+- Windows 10/11 (для portable)
+- Интернет (для скачивания видео)
+
+## Быстрая сборка (Windows)
+```
+download_deps.bat   # загрузит yt-dlp и подготовит структуру
+build.bat           # соберёт dist\ и ZIP
+```
+
+## Ручная сборка
+```
+mkdir bin assets
+# скачайте yt-dlp.exe в bin/
+go mod tidy
+go build -ldflags="-s -w" -o yt-downloader.exe .
+```
+
+## Portable структура
+```
+YouTube-Downloader-Portable/
+├─ yt-downloader.exe
+├─ bin/yt-dlp.exe
+├─ assets/            (опционально)
+├─ links.txt
+└─ README.txt (EN/ES)
+```
+
+## Запуск и опции
+- Главное меню: Аудио (MP3) / Видео (MP4/WebM)
+- Качество видео: 2160p, 1440p, 1080p, 720p, 480p, 360p
+- Звуки завершения синтезируются кодом (файлы WAV не обязательны)
+
+## Частые проблемы
+- "go: command not found" — установите Go и добавьте в PATH
+- "yt-dlp.exe not found" — запустите `download_deps.bat` или положите файл в `bin/`
+- Большой размер exe — используйте `-ldflags="-s -w"`, при желании UPX
+
+---
+
+# 🇪🇸 Instrucciones de compilación (resumen)
+
+## Requisitos
+- Go 1.24.2+
+- Windows 10/11 (portable)
+- Conexión a internet (para descargar videos)
+
+## Compilación rápida (Windows)
+```
+download_deps.bat   # descarga yt-dlp y prepara carpetas
+build.bat           # crea dist\ y el ZIP portable
+```
+
+## Compilación manual
+```
+mkdir bin assets
+# descargue yt-dlp.exe a bin/
+go mod tidy
+go build -ldflags="-s - w" -o yt-downloader.exe .
+```
+
+## Estructura portable
+```
+YouTube-Downloader-Portable/
+├─ yt-downloader.exe
+├─ bin/yt-dlp.exe
+├─ assets/            (opcional)
+├─ links.txt
+└─ README.txt (EN/ES)
+```
+
+## Ejecución y opciones
+- Menú principal: Audio (MP3) / Video (MP4/WebM)
+- Calidad de video: 2160p, 1440p, 1080p, 720p, 480p, 360p
+- Los sonidos de finalización se sintetizan en tiempo de ejecución (no requiere WAV)
+
+## Problemas comunes
+- "go: command not found": instale Go y añádalo al PATH
+- "yt-dlp.exe not found": ejecute `download_deps.bat` o coloque el archivo en `bin/`
+- Tamaño grande del .exe: use `-ldflags="-s - w"`, opcionalmente UPX

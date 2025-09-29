@@ -9,7 +9,7 @@ import (
 
 const historyFile = "download_history.json"
 
-// SaveToHistory сохраняет запись о скачанном файле в историю
+// SaveToHistory appends a record about a downloaded file into history
 func SaveToHistory(url, fileName, downloadTime string) {
 	history := LoadHistory()
 	history = append(history, map[string]string{
@@ -28,7 +28,7 @@ func SaveToHistory(url, fileName, downloadTime string) {
 	}
 }
 
-// LoadHistory загружает историю скачивания из файла
+// LoadHistory loads download history from file
 func LoadHistory() []map[string]string {
 	var history []map[string]string
 	data, err := os.ReadFile(historyFile)

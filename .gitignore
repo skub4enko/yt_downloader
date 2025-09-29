@@ -1,3 +1,6 @@
 .idea
+.vscode
 download_history.json
 links.txt
+bugs.txt
+/dist

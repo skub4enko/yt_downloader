@@ -6,211 +6,208 @@ import (
 	"os"
 	"strings"
 	"yt_downloader/audio"
-	"yt_downloader/video"
-	"yt_downloader/subtitles" // новый модуль субтитров
+	"yt_downloader/subtitles"
 	"yt_downloader/utils"
+	"yt_downloader/video"
 )
 
 func main() {
 	fmt.Println("🎬 YouTube Downloader v2.0")
 	fmt.Println("==========================")
-	
-	// Проверка и автообновление yt-dlp
+
+	// Check and auto-update yt-dlp
 	utils.CheckUpdateYtDlp()
-	
-	// Выбор типа контента
+
+	// Choose content type
 	var contentType string
-	fmt.Println("\n📋 Что будем скачивать?")
-	fmt.Println("1 - Аудио (MP3)")
-	fmt.Println("2 - Видео (MP4/WebM)")
-	fmt.Print("Ваш выбор: ")
+	fmt.Println("\n📋 What do you want to download?")
+	fmt.Println("1 - Audio (MP3)")
+	fmt.Println("2 - Video (MP4/WebM)")
+	fmt.Print("Your choice: ")
 	fmt.Scanln(&contentType)
-	
+
 	switch contentType {
 	case "1":
-		fmt.Println("\n🎵 === РЕЖИМ СКАЧИВАНИЯ АУДИО ===")
+		fmt.Println("\n🎵 === AUDIO DOWNLOAD MODE ===")
 		handleAudioDownload()
 	case "2":
-		fmt.Println("\n🎬 === РЕЖИМ СКАЧИВАНИЯ ВИДЕО ===")
+		fmt.Println("\n🎬 === VIDEO DOWNLOAD MODE ===")
 		handleVideoDownload()
 	default:
-		fmt.Println("⚠ Неверный выбор. Завершаем программу.")
+		fmt.Println("⚠ Invalid choice. Exiting.")
 		return
 	}
-	
-	fmt.Println("\n🎉 Программа завершена!")
+
+	fmt.Println("\n🎉 Done!")
+	fmt.Println("Press Enter to close")
+	fmt.Scanln()
 }
 
-// handleAudioDownload обрабатывает скачивание аудио
+// handleAudioDownload handles audio download flow
 func handleAudioDownload() {
-	// Выбор качества аудио
 	audio.PromptAudioQuality()
-	
-	// Выбор режима
+
 	var mode string
-	fmt.Println("\n📥 Выберите режим скачивания:")
-	fmt.Println("1 - Одиночная загрузка")
-	fmt.Println("2 - Пакетная загрузка из файла")
-	fmt.Print("Ваш выбор: ")
+	fmt.Println("\n📥 Select download mode:")
+	fmt.Println("1 - Single URL")
+	fmt.Println("2 - Batch from file")
+	fmt.Print("Your choice: ")
 	fmt.Scanln(&mode)
-	
+
 	switch mode {
 	case "1":
-		// Одиночная загрузка аудио
-		fmt.Print("\n🔗 Введите URL видео: ")
+		fmt.Print("\n🔗 Enter video URL: ")
 		var url string
 		fmt.Scanln(&url)
-		
+
 		if !utils.IsValidURL(url) {
-			fmt.Println("⚠ Неверный формат URL")
+			fmt.Println("⚠ Invalid URL format")
 			return
 		}
-		
-		fmt.Println("\n🔍 Получаем информацию о видео...")
+
+		folder := chooseDownloadFolder()
+		fmt.Println("\n🔍 Fetching video info...")
 		fileName := audio.GetTitleFromURL(url)
-		folder, _ := os.Getwd()
-		
-		fmt.Printf("📁 Файл будет сохранен: %s.mp3\n", fileName)
+		fmt.Printf("📁 Output file: %s.mp3\n", fileName)
 		audio.DownloadAudio(url, fileName, folder)
-		
+
 	case "2":
-		// Пакетная загрузка аудио
-		fmt.Print("\n📄 Используется файл: links.txt")
-		
-		// Проверяем существование файла
 		if _, err := os.Stat("links.txt"); os.IsNotExist(err) {
-			fmt.Println("\n⚠ Файл links.txt не найден!")
-			fmt.Println("💡 Создайте файл links.txt и добавьте в него URL видео (по одному на строку)")
+			fmt.Println("\n⚠ File links.txt not found!")
+			fmt.Println("💡 Create links.txt and add video URLs (one per line)")
 			return
 		}
-		
-		audio.ProcessBatchFile("links.txt")
-		
+
+		folder := chooseDownloadFolder()
+		audio.ProcessBatchFile("links.txt", folder)
+
 	default:
-		fmt.Println("⚠ Неверный выбор режима.")
+		fmt.Println("⚠ Invalid mode selection.")
 	}
 }
 
-// handleVideoDownload обрабатывает скачивание видео
+// handleVideoDownload handles video download flow
 func handleVideoDownload() {
-	// Выбор качества видео
 	video.PromptVideoQuality()
-	
-	// Настройки субтитров
 	subOptions := subtitles.PromptSubtitleOptions()
-	
-	// Выбор режима
+
 	var mode string
-	fmt.Println("\n📥 Выберите режим скачивания:")
-	fmt.Println("1 - Одиночная загрузка")
-	fmt.Println("2 - Пакетная загрузка из файла")
-	fmt.Println("3 - Проверить доступные субтитры (без скачивания)")
-	fmt.Print("Ваш выбор: ")
+	fmt.Println("\n📥 Select download mode:")
+	fmt.Println("1 - Single URL")
+	fmt.Println("2 - Batch from file")
+	fmt.Println("3 - List available subtitles (no download)")
+	fmt.Print("Your choice: ")
 	fmt.Scanln(&mode)
-	
+
 	switch mode {
 	case "1":
-		// Одиночная загрузка видео
-		fmt.Print("\n🔗 Введите URL видео: ")
+		fmt.Print("\n🔗 Enter video URL: ")
 		var url string
 		fmt.Scanln(&url)
-		
+
 		if !utils.IsValidURL(url) {
-			fmt.Println("⚠ Неверный формат URL")
+			fmt.Println("⚠ Invalid URL format")
 			return
 		}
-		
-		// Показываем доступные субтитры если нужно
+
 		if subOptions.DownloadSubtitles {
 			subtitles.ShowAvailableSubtitles(url)
 		}
-		
-		fmt.Println("\n🔍 Получаем информацию о видео...")
+
+		folder := chooseDownloadFolder()
+		fmt.Println("\n🔍 Fetching video info...")
 		fileName := video.GetVideoTitle(url)
-		folder, _ := os.Getwd()
-		
-		fmt.Printf("📁 Файл будет сохранен: %s\n", fileName)
+		fmt.Printf("📁 Output file: %s\n", fileName)
 		video.DownloadVideoWithSubtitles(url, fileName, folder, subOptions)
-		
+
 	case "2":
-		// Пакетная загрузка видео
-		fmt.Print("\n📄 Используется файл: links.txt")
-		
-		// Проверяем существование файла
 		if _, err := os.Stat("links.txt"); os.IsNotExist(err) {
-			fmt.Println("\n⚠ Файл links.txt не найден!")
-			fmt.Println("💡 Создайте файл links.txt и добавьте в него URL видео (по одному на строку)")
+			fmt.Println("\n⚠ File links.txt not found!")
+			fmt.Println("💡 Create links.txt and add video URLs (one per line)")
 			return
 		}
-		
-		// Для пакетной загрузки используем те же настройки субтитров
+
 		processVideoBatchFileWithSubtitles("links.txt", subOptions)
-		
+
 	case "3":
-		// Просто проверить субтитры
-		fmt.Print("\n🔗 Введите URL видео: ")
+		fmt.Print("\n🔗 Enter video URL: ")
 		var url string
 		fmt.Scanln(&url)
-		
+
 		if !utils.IsValidURL(url) {
-			fmt.Println("⚠ Неверный формат URL")
+			fmt.Println("⚠ Invalid URL format")
 			return
 		}
-		
+
 		subtitles.ShowAvailableSubtitles(url)
-		
+
 	default:
-		fmt.Println("⚠ Неверный выбор режима.")
+		fmt.Println("⚠ Invalid mode selection.")
 	}
 }
 
-// processVideoBatchFileWithSubtitles обрабатывает пакетную загрузку с субтитрами
+// chooseDownloadFolder asks where to save files
+func chooseDownloadFolder() string {
+	var choice string
+	fmt.Println("\n📂 Where to save files?")
+	fmt.Println("1 - Current program folder (default)")
+	fmt.Println("2 - Enter a custom folder path")
+	fmt.Print("Your choice: ")
+	fmt.Scanln(&choice)
+
+	switch choice {
+	case "2":
+		fmt.Print("Enter full folder path: ")
+		var path string
+		fmt.Scanln(&path)
+		return path
+	default:
+		folder, _ := os.Getwd()
+		return folder
+	}
+}
+
+// processVideoBatchFileWithSubtitles handles batch video downloads
 func processVideoBatchFileWithSubtitles(filePath string, subOptions subtitles.SubtitleOptions) {
 	file, err := os.Open(filePath)
 	if err != nil {
-		fmt.Printf("⚠ Не удалось открыть файл: %s\n", filePath)
+		fmt.Printf("⚠ Failed to open file: %s\n", filePath)
 		return
 	}
 	defer file.Close()
-	
+
 	var urls []string
 	scanner := bufio.NewScanner(file)
-	
-	// Читаем все URL из файла
 	for scanner.Scan() {
 		url := strings.TrimSpace(scanner.Text())
 		if url == "" || strings.HasPrefix(url, "#") {
-			continue // пропускаем пустые строки и комментарии
+			continue
 		}
 		urls = append(urls, url)
 	}
-	
+
 	if err := scanner.Err(); err != nil {
-		fmt.Printf("⚠ Ошибка чтения файла: %v\n", err)
+		fmt.Printf("⚠ File read error: %v\n", err)
 		return
 	}
-	
+
 	if len(urls) == 0 {
-		fmt.Println("⚠ В файле не найдено валидных URL")
+		fmt.Println("⚠ No valid URLs found in file")
 		return
 	}
-	
-	fmt.Printf("📋 Найдено %d видео для скачивания\n", len(urls))
+
+	fmt.Printf("📋 Found %d videos to download\n", len(urls))
 	folder, _ := os.Getwd()
-	
-	// Обрабатываем каждый URL
+
 	for i, url := range urls {
-		fmt.Printf("\n🎬 Обрабатываем %d/%d: %s\n", i+1, len(urls), url)
-		
+		fmt.Printf("\n🎬 Processing %d/%d: %s\n", i+1, len(urls), url)
 		fileName := video.GetVideoTitle(url)
 		video.DownloadVideoWithSubtitles(url, fileName, folder, subOptions)
-		
-		// Пауза между скачиваниями (опционально)
 		if i < len(urls)-1 {
-			fmt.Println("⏳ Пауза 2 секунды перед следующим видео...")
-			// time.Sleep(2 * time.Second) // раскомментируйте если нужна пауза
+			fmt.Println("⏳ Pause 2 seconds before next video...")
 		}
 	}
-	
-	fmt.Printf("\n🎉 Пакетное скачивание завершено! Обработано видео: %d\n", len(urls))
+
+	fmt.Printf("\n🎉 Batch download completed! Processed: %d\n", len(urls))
+	utils.PlayBeepLong()
 }

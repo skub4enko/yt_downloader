@@ -11,13 +11,14 @@ import (
 	"yt_downloader/utils"
 )
 
-// =================== Выбор битрейта ===================
+// =================== Audio bitrate selection ===================
 
-var AudioBitrate string = "64" // дефолтный битрейт теперь 64 kbps
+var AudioBitrate string = "64" // default bitrate
 
 func PromptAudioQuality() {
-	fmt.Println("Выберите битрейт аудио:")
-	fmt.Println("1 - 64 kbps (по умолчанию)")
+	fmt.Println("Select audio bitrate:")
+	fmt.Println("0 - 32 kbps")
+	fmt.Println("1 - 64 kbps (default)")
 	fmt.Println("2 - 96 kbps")
 	fmt.Println("3 - 128 kbps")
 	fmt.Println("4 - 256 kbps")
@@ -28,6 +29,8 @@ func PromptAudioQuality() {
 	fmt.Scanln(&choice)
 
 	switch choice {
+	case "0":
+		AudioBitrate = "32"
 	case "2":
 		AudioBitrate = "96"
 	case "3":
@@ -42,12 +45,11 @@ func PromptAudioQuality() {
 		AudioBitrate = "64"
 	}
 
-	fmt.Println("Выбран битрейт:", AudioBitrate, "kbps")
+	fmt.Println("Selected bitrate:", AudioBitrate, "kbps")
 }
 
 // =================== YouTube ===================
 
-// GetTitleFromURL получает название видео с YouTube
 func GetTitleFromURL(url string) string {
 	title := utils.GetVideoTitle(url)
 	if title == "" {
@@ -56,16 +58,17 @@ func GetTitleFromURL(url string) string {
 	return utils.SanitizeFileName(title)
 }
 
-// =================== Загрузка и извлечение аудио ===================
+// =================== Audio download ===================
 
-func DownloadAudio(url string, filename string, folder string) {
+func DownloadAudio(url, filename, folder string) {
 	ytPath := filepath.Join("bin", "yt-dlp.exe")
 	outPath := filepath.Join(folder, filename+".%(ext)s")
 
 	args := []string{
-		"-x",                    // извлечение аудио
-		"--audio-format", "mp3", // формат mp3
+		"-x",
+		"--audio-format", "mp3",
 		"--audio-quality", AudioBitrate + "K",
+		"--ffmpeg-location", "bin",
 		"-o", outPath,
 		url,
 	}
@@ -75,20 +78,27 @@ func DownloadAudio(url string, filename string, folder string) {
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Run(); err != nil {
-		fmt.Println("⚠ Ошибка при запуске yt-dlp:", err)
+		fmt.Println("⚠ Failed to run yt-dlp:", err)
 		return
 	}
 
-	fmt.Println("\n✅ Загрузка и извлечение аудио завершены:", filename+".mp3")
-	utils.PlayBeep() // сигнал окончания
+	fmt.Println("\n✅ Audio download and extraction completed:", filename+".mp3")
+
+	// secure call beep
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("⚠ Beep playback error:", r)
+		}
+	}()
+	utils.PlayBeepShort()
 }
 
-// =================== Пакетная обработка ===================
+// =================== Batch download ===================
 
-func ProcessBatchFile(filePath string) {
+func ProcessBatchFile(filePath, folder string) {
 	file, err := os.Open(filePath)
 	if err != nil {
-		fmt.Println("⚠ Не удалось открыть файл:", filePath)
+		fmt.Println("⚠ Failed to open file:", filePath, "error:", err)
 		return
 	}
 	defer file.Close()
@@ -99,13 +109,27 @@ func ProcessBatchFile(filePath string) {
 		if url == "" {
 			continue
 		}
-		fmt.Println("\n🎬 Загружаем:", url)
+
+		fmt.Println("\n🎬 Downloading:", url)
+
 		fileName := GetTitleFromURL(url)
-		folder, _ := os.Getwd()
-		DownloadAudio(url, fileName, folder) // beep внутри функции
+		if fileName == "" {
+			fmt.Println("⚠ Failed to get filename for:", url)
+			continue
+		}
+
+		//secure start every download
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					fmt.Println("⚠ Panic during download:", r)
+				}
+			}()
+			DownloadAudio(url, fileName, folder)
+		}()
 	}
 
 	if err := scanner.Err(); err != nil {
-		fmt.Println("⚠ Ошибка чтения файла:", err)
+		fmt.Println("⚠ File read error:", err)
 	}
 }
