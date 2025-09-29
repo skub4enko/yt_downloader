@@ -1,6 +1,12 @@
-.idea
-.vscode
+# IDE
+.idea/
+.vscode/
+
+# Временные файлы
 download_history.json
 links.txt
 bugs.txt
-/dist
+
+# Сборки
+dist/
+bin/
