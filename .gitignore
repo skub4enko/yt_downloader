@@ -1,13 +1,44 @@
-# IDE
-.idea/
-.vscode/
+# Go-specific ignores
+#*.exe
+#*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+#yt_downloader
 
-# Временные файлы
-download_history.json
-links.txt
-bugs.txt
-
-# Сборки
-dist/
+# Project-specific ignores
 bin/
-assets/
+links.txt
+*.mp3
+*.mp4
+*.webm
+*.srt
+*.zip
+
+# Logs and temporary files
+*.log
+*.swp
+*.swo
+*.tmp
+*.bak
+
+# Go build cache and module cache
+go.sum
+vendor/
+*.prof
+*.cover
+
+# Editor/IDE files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# macOS-specific
+.DS_Store
+
+# Windows-specific
+Thumbs.db
+desktop.ini
