@@ -1,5 +1,3 @@
-//go:build windows
-
 package utils
 
 import (
@@ -14,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -25,9 +24,17 @@ import (
 
 // =================== YouTube Downloader ===================
 
+// getYTDLPBinary returns the path to yt-dlp binary based on the OS
+func getYTDLPBinary() string {
+	if runtime.GOOS == "windows" {
+		return filepath.Join("bin", "yt-dlp.exe")
+	}
+	return filepath.Join("bin", "yt-dlp")
+}
+
 // GetVideoTitle extracts the video title using yt-dlp
 func GetVideoTitle(url string) string {
-	ytPath := filepath.Join("bin", "yt-dlp.exe")
+	ytPath := getYTDLPBinary()
 
 	// Ensure proper encoding flags
 	cmd := exec.Command(ytPath, "--quiet", "--get-title", "--encoding", "utf-8", url)
@@ -250,11 +257,12 @@ func playTone(frequencyHz int, durationMs int) error {
 
 // =================== yt-dlp auto update ===================
 
-// UpdateYtDlp updates yt-dlp.exe in bin
+// UpdateYtDlp updates yt-dlp binary in bin
 func UpdateYtDlp() {
-	ytPath := filepath.Join("bin", "yt-dlp.exe")
+	ytPath := getYTDLPBinary()
 
 	cmd := exec.Command(ytPath, "-U")
+	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		fmt.Println("⚠ yt-dlp update error:", err)
@@ -267,17 +275,18 @@ func UpdateYtDlp() {
 
 // CheckUpdateYtDlp checks for new yt-dlp version
 func CheckUpdateYtDlp() {
-	ytPath := filepath.Join("bin", "yt-dlp.exe")
+	ytPath := getYTDLPBinary()
 
 	// Check local binary exists
 	if _, err := os.Stat(ytPath); os.IsNotExist(err) {
-		fmt.Println("⚠ bin/yt-dlp.exe not found, downloading latest...")
+		fmt.Println("⚠ yt-dlp binary not found, downloading latest...")
 		downloadYtDlp(ytPath)
 		return
 	}
 
 	// Get local version
 	cmd := exec.Command(ytPath, "--version")
+	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8")
 	currentVerBytes, err := cmd.Output()
 	if err != nil {
 		fmt.Println("⚠ Failed to get local yt-dlp version:", err)
@@ -299,36 +308,54 @@ func CheckUpdateYtDlp() {
 
 	if latestVer != "" && latestVer != currentVer {
 		fmt.Println("⬆ New yt-dlp available:", latestVer, "current:", currentVer)
-		UpdateYtDlp()
+		downloadYtDlp(ytPath) // Download new version instead of running -U
 	} else {
 		fmt.Println("✅ yt-dlp is up to date:", currentVer)
 	}
 }
 
-// downloadYtDlp downloads yt-dlp.exe into bin/
+// downloadYtDlp downloads the appropriate yt-dlp binary into bin/
 func downloadYtDlp(ytPath string) {
-	url := "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
-	resp, err := http.Get(url)
-	if err != nil {
-		fmt.Println("⚠ yt-dlp download error:", err)
-		return
-	}
-	defer resp.Body.Close()
+    url := "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
+    if runtime.GOOS != "windows" {
+        url = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux" // Используем yt-dlp_linux
+    }
 
-	os.MkdirAll(filepath.Dir(ytPath), os.ModePerm)
+    resp, err := http.Get(url)
+    if err != nil {
+        fmt.Println("⚠ yt-dlp download error:", err)
+        return
+    }
+    defer resp.Body.Close()
 
-	out, err := os.Create(ytPath)
-	if err != nil {
-		fmt.Println("⚠ Failed to create yt-dlp.exe:", err)
-		return
-	}
-	defer out.Close()
+    if resp.StatusCode != http.StatusOK {
+        fmt.Println("⚠ Failed to download yt-dlp: HTTP status", resp.Status)
+        return
+    }
 
-	_, err = io.Copy(out, resp.Body)
-	if err != nil {
-		fmt.Println("⚠ Failed to write yt-dlp.exe:", err)
-		return
-	}
+    os.MkdirAll(filepath.Dir(ytPath), os.ModePerm)
 
-	fmt.Println("✅ yt-dlp.exe downloaded to bin/")
+    out, err := os.Create(ytPath)
+    if err != nil {
+        fmt.Println("⚠ Failed to create yt-dlp binary:", err)
+        return
+    }
+    defer out.Close()
+
+    _, err = io.Copy(out, resp.Body)
+    if err != nil {
+        fmt.Println("⚠ Failed to write yt-dlp binary:", err)
+        return
+    }
+
+    // Set executable permissions on Linux
+    if runtime.GOOS != "windows" {
+        err = os.Chmod(ytPath, 0755)
+        if err != nil {
+            fmt.Println("⚠ Failed to set executable permissions for yt-dlp:", err)
+            return
+        }
+    }
+
+    fmt.Println("✅ yt-dlp binary downloaded to", ytPath)
 }

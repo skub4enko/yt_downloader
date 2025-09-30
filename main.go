@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
+	"time"
 	"yt_downloader/audio"
 	"yt_downloader/subtitles"
 	"yt_downloader/utils"
@@ -17,6 +19,16 @@ func main() {
 
 	// Check and auto-update yt-dlp
 	utils.CheckUpdateYtDlp()
+
+	// Ensure links.txt exists in the project root
+	linksFile := filepath.Join(".", "links.txt") // Корень проекта
+	if _, err := os.Stat(linksFile); os.IsNotExist(err) {
+		err := os.WriteFile(linksFile, []byte("# Enter YouTube URLs here, one per line\n# Example: https://www.youtube.com/watch?v=example\n"), 0644)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "⚠ Failed to create links.txt: %v\n", err)
+			return
+		}
+	}
 
 	// Choose content type
 	var contentType string
@@ -72,12 +84,6 @@ func handleAudioDownload() {
 		audio.DownloadAudio(url, fileName, folder)
 
 	case "2":
-		if _, err := os.Stat("links.txt"); os.IsNotExist(err) {
-			fmt.Println("\n⚠ File links.txt not found!")
-			fmt.Println("💡 Create links.txt and add video URLs (one per line)")
-			return
-		}
-
 		folder := chooseDownloadFolder()
 		audio.ProcessBatchFile("links.txt", folder)
 
@@ -121,13 +127,8 @@ func handleVideoDownload() {
 		video.DownloadVideoWithSubtitles(url, fileName, folder, subOptions)
 
 	case "2":
-		if _, err := os.Stat("links.txt"); os.IsNotExist(err) {
-			fmt.Println("\n⚠ File links.txt not found!")
-			fmt.Println("💡 Create links.txt and add video URLs (one per line)")
-			return
-		}
-
-		processVideoBatchFileWithSubtitles("links.txt", subOptions)
+		folder := chooseDownloadFolder()
+		processVideoBatchFileWithSubtitles("links.txt", folder, subOptions)
 
 	case "3":
 		fmt.Print("\n🔗 Enter video URL: ")
@@ -168,7 +169,7 @@ func chooseDownloadFolder() string {
 }
 
 // processVideoBatchFileWithSubtitles handles batch video downloads
-func processVideoBatchFileWithSubtitles(filePath string, subOptions subtitles.SubtitleOptions) {
+func processVideoBatchFileWithSubtitles(filePath string, folder string, subOptions subtitles.SubtitleOptions) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		fmt.Printf("⚠ Failed to open file: %s\n", filePath)
@@ -197,7 +198,6 @@ func processVideoBatchFileWithSubtitles(filePath string, subOptions subtitles.Su
 	}
 
 	fmt.Printf("📋 Found %d videos to download\n", len(urls))
-	folder, _ := os.Getwd()
 
 	for i, url := range urls {
 		fmt.Printf("\n🎬 Processing %d/%d: %s\n", i+1, len(urls), url)
@@ -205,6 +205,7 @@ func processVideoBatchFileWithSubtitles(filePath string, subOptions subtitles.Su
 		video.DownloadVideoWithSubtitles(url, fileName, folder, subOptions)
 		if i < len(urls)-1 {
 			fmt.Println("⏳ Pause 2 seconds before next video...")
+			time.Sleep(2 * time.Second)
 		}
 	}
 
